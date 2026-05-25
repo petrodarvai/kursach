@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Feeder Panel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans">
+    <div class="container mx-auto px-4 py-8 max-w-5xl">
+        <header class="flex justify-between items-center border-b border-gray-800 pb-4 mb-8">
+            <h1 class="text-3xl font-bold text-emerald-400">Smart Pet Feeder</h1>
+            <div id="connection-badge" class="px-3 py-1 rounded-full text-sm font-semibold bg-red-500 text-white">Офлайн</div>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg col-span-1">
+                <h2 class="text-xl font-semibold mb-4 text-gray-300">Стан годівниці</h2>
+                <div class="mb-6">
+                    <label class="text-sm text-gray-400 block mb-1">Кількість корму:</label>
+                    <div class="w-full bg-gray-700 h-6 rounded-full overflow-hidden">
+                        <div id="tank-bar" class="bg-emerald-500 h-full text-center text-xs font-bold text-gray-900 flex items-center justify-center transition-all duration-500" style="width: 0%">0%</div>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-sm text-gray-400 block mb-1">Вага корму в мисці:</label>
+                    <span id="weight-display" class="text-4xl font-black text-white">0</span> <span class="text-gray-400">грамів</span>
+                </div>
+            </div>
+
+            <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg col-span-1 md:col-span-2">
+                <h2 class="text-xl font-semibold mb-4 text-gray-300">Панель дій</h2>
+                <div class="flex gap-4 mb-6">
+                    <input id="manual-amount" type="number" value="50" class="bg-gray-700 text-white px-4 py-2 rounded-lg w-28 focus:outline-none focus:ring-2 focus:ring-emerald-400">
+                    <button onclick="triggerFeeding()" class="bg-emerald-500 hover:bg-emerald-600 text-gray-900 font-bold px-6 py-2 rounded-lg transition duration-200">Нагодувати зараз</button>
+                </div>
+                
+                <h3 class="text-lg font-medium mb-3 text-gray-300">Автоматичний розклад</h3>
+                <div class="flex gap-2 mb-4">
+                    <input id="sched-time" type="time" class="bg-gray-700 p-2 rounded text-white">
+                    <input id="sched-amount" type="number" placeholder="Грами" class="bg-gray-700 p-2 rounded text-white w-24">
+                    <button onclick="addSchedule()" class="bg-blue-500 hover:bg-blue-600 px-4 rounded font-bold text-white">+</button>
+                </div>
+                <ul id="schedule-list" class="space-y-2 max-h-32 overflow-y-auto"></ul>
+            </div>
+
+            <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg col-span-1 md:col-span-3">
+                <h2 class="text-xl font-semibold mb-4 text-gray-300">Журнал активності</h2>
+                <div id="log-container" class="bg-gray-950 p-4 rounded-lg h-40 overflow-y-auto font-mono text-sm text-gray-400 space-y-1"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let schedules = [];
+
+        socket.on('connect', () => {
+            const badge = document.getElementById('connection-badge');
+            badge.innerText = "Онлайн";
+            badge.className = "px-3 py-1 rounded-full text-sm font-semibold bg-emerald-500 text-gray-900";
+        });
+
+        socket.on('init_data', (data) => {
+            schedules = data.schedules;
+            renderSchedules();
+            const logContainer = document.getElementById('log-container');
+            logContainer.innerHTML = '';
+            data.logs.forEach(log => appendLog(log));
+        });
+
+        socket.on('device_status', (data) => {
+            if(data.status === "removed") {
+                document.getElementById('weight-display').innerText = "---";
+                document.getElementById('tank-bar').innerText = "Обслуговування";
+                document.getElementById('tank-bar').style.width = "100%";
+                document.getElementById('tank-bar').className = "bg-amber-500 h-full text-center text-xs font-bold text-gray-900 flex items-center justify-center";
+            } else {
+                document.getElementById('weight-display').innerText = data.weight;
+                const bar = document.getElementById('tank-bar');
+                bar.innerText = data.feed_level + "%";
+                bar.style.width = data.feed_level + "%";
+                bar.className = "bg-emerald-500 h-full text-center text-xs font-bold text-gray-900 flex items-center justify-center";
+            }
+        });
+
+        socket.on('new_log', (log) => appendLog(log));
+        
+        socket.on('device_error', (data) => {
+            let msg = data.error === "bowl_full" ? "Скасовано: миска вже повна" : "Помилка: заклинило шнек!";
+            appendLog({ time: new Date().toLocaleTimeString(), msg: msg });
+        });
+
+        function triggerFeeding() {
+            const amt = document.getElementById('manual-amount').value;
+            socket.emit('manual_feed', { amount: amt });
+        }
+
+        function addSchedule() {
+            const time = document.getElementById('sched-time').value;
+            const amount = document.getElementById('sched-amount').value;
+            if(time && amount) {
+                schedules.push({ time, amount });
+                socket.emit('save_schedule', schedules);
+            }
+        }
+
+        function deleteSchedule(idx) {
+            schedules.splice(idx, 1);
+            socket.emit('save_schedule', schedules);
+        }
+
+        function renderSchedules() {
+            const list = document.getElementById('schedule-list');
+            list.innerHTML = '';
+            schedules.forEach((s, idx) => {
+                list.innerHTML += `<li class="flex justify-between items-center bg-gray-700 p-2 rounded">
+                    <span>Час: <b>${s.time}</b> — Поція: <b>${s.amount}г</b></span>
+                    <button onclick="deleteSchedule(${idx})" class="text-red-400 hover:text-red-600 font-bold px-2">Видалити</button>
+                </li>`;
+            });
+        }
+
+        function appendLog(log) {
+            const container = document.getElementById('log-container');
+            container.innerHTML = `<div>[${log.time}] ${log.msg}</div>` + container.innerHTML;
+        }
+
+        socket.on('update_schedules', (data) => {
+            schedules = data;
+            renderSchedules();
+        });
+    </script>
+</body>
+</html>
