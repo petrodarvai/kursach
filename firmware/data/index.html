@@ -5,104 +5,121 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Smart Feeder</title>
     <style>
-        body { font-family: Arial, sans-serif; background-color: #f4f4f9; padding: 20px; color: #333; }
-        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        h1, h2 { color: #2c3e50; margin-top: 0; }
-        .data-row { display: flex; justify-content: space-between; font-size: 1.2em; border-bottom: 1px solid #eee; padding: 10px 0; }
-        button { background: #3498db; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; margin-right: 10px; margin-bottom: 15px; }
-        button:hover { background: #2980b9; }
-        .btn-danger { background: #e74c3c; }
-        .btn-danger:hover { background: #c0392b; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background-color: #2c3e50; color: white; }
-        tr:hover { background-color: #f1f1f1; }
-        .table-container { max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 5px; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; color: #333; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .card { background: white; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); width: 100%; max-width: 600px; padding: 20px; margin-bottom: 20px; box-sizing: border-box; }
+        h2 { color: #2c3e50; margin-top: 0; display: flex; align-items: center; gap: 10px; }
+        .data-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #edf2f7; font-size: 1.1rem; }
+        .data-row:last-child { border-bottom: none; }
+        .value { font-weight: bold; color: #1a202c; }
+        .btn-group { margin-bottom: 15px; display: flex; gap: 10px; }
+        button { padding: 10px 18px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+        .btn-refresh { background-color: #3498db; color: white; }
+        .btn-refresh:hover { background-color: #2980b9; }
+        .btn-clear { background-color: #e74c3c; color: white; }
+        .btn-clear:hover { background-color: #c0392b; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; border-radius: 6px; overflow: hidden; }
+        th { background-color: #2c3e50; color: white; padding: 12px; text-align: left; }
+        td { padding: 12px; background-color: #f8f9fa; border-bottom: 1px solid #e9ecef; font-size: 0.95rem; }
+        tr:last-child td { border-bottom: none; }
     </style>
 </head>
 <body>
 
     <div class="card">
-        <h1>🐾 Feeder Status</h1>
-        <div class="data-row"><span>Bowl Weight:</span> <strong id="weight">... g</strong></div>
-        <div class="data-row"><span>Food Level:</span> <strong id="level">... %</strong></div>
+        <h2>🐾 Feeder Status</h2>
+        <div class="data-row">
+            <span>Bowl Weight:</span>
+            <span class="value"><span id="bowl-weight">0</span> g</span>
+        </div>
+        <div class="data-row">
+            <span>Food Level:</span>
+            <span class="value"><span id="food-level">0</span> %</span>
+        </div>
     </div>
 
     <div class="card">
         <h2>📊 System Logs (CSV)</h2>
-        <button onclick="loadLogs()">Refresh Logs</button>
-        <button class="btn-danger" onclick="clearLogs()">Clear Logs</button>
-        
-        <div class="table-container">
-            <table id="logTable">
-                <thead>
-                    <tr>
-                        <th>Time (ms)</th>
-                        <th>Event</th>
-                    </tr>
-                </thead>
-                <tbody id="logBody">
-                    <tr><td colspan="2">Loading logs...</td></tr>
-                </tbody>
-            </table>
+        <div class="btn-group">
+            <button class="btn-refresh" onclick="loadLogs()">Refresh Logs</button>
+            <button class="btn-clear" onclick="clearLogs()">Clear Logs</button>
         </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Time (ms)</th>
+                    <th>Weight (g)</th>
+                    <th>Food Level (%)</th>
+                </tr>
+            </thead>
+            <tbody id="logs-table-body">
+                <tr>
+                    <td colspan="3" style="text-align: center; color: #7f8c8d;">Loading data...</td>
+                </tr>
+            </tbody>
+        </table>
     </div>
 
     <script>
-        setInterval(async () => {
-            try {
-                const response = await fetch('/api/data');
-                const data = await response.json();
-                document.getElementById('weight').innerText = data.weight + ' g';
-                document.getElementById('level').innerText = data.feed_level + ' %';
-            } catch (err) {
-                console.error('Error loading data:', err);
-            }
-        }, 3000);
-
         async function loadLogs() {
             try {
-                const response = await fetch('/log.csv');
-                if (!response.ok) throw new Error("File not found");
-                const text = await response.text();
+                const response = await fetch('/log.csv?t=' + Date.now());
+                if (!response.ok) throw new Error('Log file is empty or missing');
                 
-                const rows = text.trim().split('\n');
-                const tbody = document.getElementById('logBody');
-                tbody.innerHTML = '';
+                const text = await response.text();
+                const lines = text.trim().split('\n');
+                const tbody = document.getElementById('logs-table-body');
+                tbody.innerHTML = ''; 
 
-                if (rows.length === 0 || rows[0] === "") {
-                    tbody.innerHTML = '<tr><td colspan="2">Log file is empty.</td></tr>';
+                if (lines.length === 0 || lines[0] === "") {
+                    tbody.innerHTML = '<tr><td colspan="3" style="text-align: center;">Logs are empty</td></tr>';
+                    document.getElementById('bowl-weight').innerText = "0";
+                    document.getElementById('food-level').innerText = "0";
                     return;
                 }
 
-                for (let i = 1; i < rows.length; i++) {
-                    const cols = rows[i].split(',');
-                    if (cols.length >= 2) {
-                        const tr = document.createElement('tr');
-                        
-                        const tdTime = document.createElement('td');
-                        tdTime.innerText = cols[0];
-                        
-                        const tdEvent = document.createElement('td');
-                        tdEvent.innerText = cols.slice(1).join(','); 
-                        
-                        tr.appendChild(tdTime);
-                        tr.appendChild(tdEvent);
-                        tbody.appendChild(tr);
+                let lastWeight = 0;
+                let lastLevel = 0;
+
+                for (let i = lines.length - 1; i >= 0; i--) {
+                    if (!lines[i]) continue;
+                    const data = lines[i].split(','); 
+                    
+                    if (data.length === 3) {
+                        if (i === lines.length - 1) {
+                            lastWeight = data[1];
+                            lastLevel = data[2];
+                        }
+
+                        const row = `<tr>
+                            <td>${data[0]}</td>
+                            <td>${data[1]} g</td>
+                            <td>${data[2]} %</td>
+                        </tr>`;
+                        tbody.innerHTML += row;
                     }
                 }
-            } catch (err) {
-                document.getElementById('logBody').innerHTML = '<tr><td colspan="2">Failed to load log. The file may not exist yet.</td></tr>';
+
+                document.getElementById('bowl-weight').innerText = lastWeight;
+                document.getElementById('food-level').innerText = lastLevel;
+
+            } catch (error) {
+                console.log(error.message);
+                document.getElementById('logs-table-body').innerHTML = `<tr><td colspan="3" style="text-align: center; color: #e74c3c;">No logs found</td></tr>`;
             }
         }
 
         async function clearLogs() {
-            await fetch('/clear_log');
-            loadLogs();
+            if (confirm("Clear all logs?")) {
+                await fetch('/clear_log?t=' + Date.now());
+                document.getElementById('logs-table-body').innerHTML = '<tr><td colspan="3" style="text-align: center;">Logs are empty</td></tr>';
+                document.getElementById('bowl-weight').innerText = "0";
+                document.getElementById('food-level').innerText = "0";
+                setTimeout(loadLogs, 400); 
+            }
         }
 
         loadLogs();
+        setInterval(loadLogs, 3000); 
     </script>
-
 </body>
 </html>
