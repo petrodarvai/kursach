@@ -6,15 +6,15 @@
 #include "HX711.h"
 
 // --- Піни компонентів ---
-#define DT_PIN D2
-#define SCK_PIN D1
-#define BUTTON_PIN D3
-#define GREEN_LED D0
-#define TRIG_PIN D5
-#define ECHO_PIN D6
-#define STEP_PIN D7
-#define DIR_PIN D8
-#define RED_LED D4
+#define DT_PIN 4 //d6
+#define SCK_PIN 5 //d5
+#define BUTTON_PIN 0 //d3
+#define GREEN_LED 16 //d8
+#define TRIG_PIN 14 //d4
+#define ECHO_PIN 12 //d7
+#define STEP_PIN 13 //d1
+#define DIR_PIN 15 //d2
+#define RED_LED 2 //d0
 
 // --- Налаштування MQTT топіків ---
 const char* topic_status = "lp_feeder/feeder_1/status";
@@ -54,8 +54,8 @@ bool loadConfig() {
   configFile.close();
   if (error) return false;
 
-  wifi_ssid = doc["032"].as<String>();
-  wifi_pass = doc["deffi723723"].as<String>();
+  wifi_ssid = doc["wifi_ssid"].as<String>();
+  wifi_pass = doc["wifi_pass"].as<String>();
   mqtt_server = doc["mqtt_server"].as<String>();
   mqtt_port = doc["mqtt_port"] | 1883;
   scale_factor = doc["scale_factor"] | 420.0;

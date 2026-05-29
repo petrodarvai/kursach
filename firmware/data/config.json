@@ -1,6 +1,6 @@
 {
-  "wifi_ssid": "RC-7Gxg-5G",
-  "wifi_pass": "26093107",
+  "wifi_ssid": "032",
+  "wifi_pass": "deffi723723",
   "mqtt_server": "broker.hivemq.com",
   "mqtt_port": 1883,
   "scale_factor": 420.0
